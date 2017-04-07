@@ -1,0 +1,11 @@
+{
+  "name": "voice",
+  "version": "1.0.0",
+  "description": "basic webrtc sfu powered by mediasoup",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Phillor",
+  "license": "ISC"
+}

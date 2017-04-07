@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+	</head>
+	<body>
+		<script src="/socket.io/socket.io.js"></script>
+		<script>
+		var username = "Phillor";
+		var sdpConstraints = {
+		    optional: [],
+		    mandatory: {
+		        OfferToReceiveAudio: true,
+		        OfferToReceiveVideo: false
+		    }
+		};
+		var socket = io();
+		var pc = new RTCPeerConnection();
+		var constraints = { audio: true, video: false };
+		navigator.mediaDevices.getUserMedia(constraints)
+		.then(function(mediaStream) {
+			console.log('got local stream');
+			pc.addStream(mediaStream);
+			pc.createOffer({ offerToReceiveAudio: 1, offerToReceiveVideo: 0 }).then((offer) => {
+				var participant = {
+					username: username,
+					usePlanB: true,
+					capabilities: offer.sdp
+				};
+				socket.emit('join', participant, '');
+				console.log("capabilities sent to mediasoup");
+			});
+		}).catch(function(err) {
+  		console.log("An error occured: "+err);
+		});
+
+		socket.on("offer", function(offer){
+			console.log("got sdpoffer from mediasoup");
+			console.log(offer.sdp);
+			pc.setRemoteDescription(offer);
+			console.log("set remote description")
+		});
+
+
+
+		</script>
+	</body>
+</html>
