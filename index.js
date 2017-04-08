@@ -43,19 +43,19 @@ const roomOptions = {
   ]
 };
 
-// Somehow our app decides to create a room by providing an "appRoom" (which
+// Somehow our app decides to create a room by providing an "socket" (which
 // is up to the application).
 
-io.on("connection", (appRoom) => {
+io.on("connection", (socket) => {
 	console.log("got a new connection");
 	mediaServer.createRoom(roomOptions)
 	  .then((mediaRoom) => {
-	   handleRoom(appRoom, mediaRoom);
+	   handleRoom(socket, mediaRoom);
 	  });
 });
 
 
-function handleRoom(appRoom, mediaRoom) {
+function handleRoom(socket, mediaRoom) {
   // Handle new participants in the room. Our custom signaling application
   // fires a "join" event when a new participant wishes to join a room (this is
   // up to the application) by providing some data:
@@ -63,52 +63,46 @@ function handleRoom(appRoom, mediaRoom) {
   //   - `username`: An unique username.
   //   - `usePlanB`: Whether it's a Chrome based endpoint.
   //   - `capabilities`: An SDP created by the browser.
-  // - `request` is supposed to be a WebSocket or HTTP request that we must
   //   accept or reject (if something is wrong).
-  appRoom.on("join", (participant, request) => {
-    handleParticipant(participant, request, appRoom, mediaRoom);
+  socket.on("join", (participant) => {
+    handleParticipant(participant, socket, mediaRoom);
 		console.log("participant with the username "+participant.username+" joined");
   });
 }
 
-function handleParticipant(participant, request, appRoom, mediaRoom) {
+function handleParticipant(participant, socket, mediaRoom) {
   // Create a new mediasoup Peer within the mediasoup Room and create a
   // RTCPeerConnection for it.
   let mediaPeer = mediaRoom.Peer(participant.username);
-	console.log(mediaRoom.peers);
   let peerconnection = new RTCPeerConnection({
     peer     : mediaPeer,
     usePlanB : participant.usePlanB
   });
   // Participant is required to join the mediasoup Room by providing a
   // capabilities SDP.
-	//console.log(participant);
   peerconnection.setCapabilities(participant.capabilities)
     .then(() => {
-      // OK, so accept the request.
-      //request.accept();
-
       // And then generate the initial SDP offer for this participant and send
       // it to him.
-      sendSdpOffer(participant, peerconnection, appRoom);
+      sendSdpOffer(participant, peerconnection, socket);
     });
 
   // When something changes in the mediasoup Room (such as when a new participant
   // joins or a participant leaves) provides this participant with an
   // updated SDP re-offer.
   peerconnection.on("negotiationneeded", () => {
-    sendSdpOffer(participant, peerconnection, appRoom);
+    sendSdpOffer(participant, peerconnection, socket);
   });
 
   // If the participant leaves the room (by means of the custom signaling
   // mechanism up to the application) close its associated peerconnection.
-  appRoom.on('disconnect', () => {
+  socket.on('disconnect', () => {
     peerconnection.close();
 		console.log("user disconnected");
   });
 }
 
-function sendSdpOffer(participant, peerconnection, appRoom) {
+function sendSdpOffer(participant, peerconnection, socket) {
   // Create an SDP offer for this participant.
   peerconnection.createOffer({
     offerToReceiveAudio : 1,
@@ -122,13 +116,17 @@ function sendSdpOffer(participant, peerconnection, appRoom) {
   })
   // Send the SDP offer to the browser.
   .then(() => {
-    return appRoom.emit("offer", peerconnection.localDescription.serialize());
+    return socket.emit("offer", peerconnection.localDescription.serialize());
   })
   // Upon receipt of the response from the browser, take the SDP answer and
   // set it as remote description.
   .then((data) => {
-		console.log("set remote description");
-    return peerconnection.setRemoteDescription(data.answer);
+		socket.on('answer', (answer) => {
+			console.log('got sdp answer from client');
+			console.log(answer.sdp);
+			console.log("set remote description");
+			return peerconnection.setRemoteDescription(data.answer);
+		});
   });
 }
 
